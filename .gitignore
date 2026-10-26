@@ -1,1 +1,6 @@
 MVP.md
+node_modules/
+dist/
+.cache/
+bench/results.json
+bench/results.md

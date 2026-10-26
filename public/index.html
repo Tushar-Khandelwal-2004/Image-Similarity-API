@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Image Similarity API</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #f6f8fc;
+        --surface: #ffffff;
+        --surface-muted: #eef2f8;
+        --border: #dce3ef;
+        --text: #152033;
+        --muted: #667085;
+        --primary: #3158d4;
+        --primary-soft: #e8edff;
+        --success: #087f5b;
+        --warning: #a15c00;
+        --danger: #c0394b;
+        --shadow: 0 18px 50px rgba(34, 55, 105, 0.1);
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #101522;
+          --surface: #172033;
+          --surface-muted: #202b42;
+          --border: #31405b;
+          --text: #eef3ff;
+          --muted: #aab5cc;
+          --primary: #8fa9ff;
+          --primary-soft: #26396c;
+          --success: #68d9b3;
+          --warning: #ffc66d;
+          --danger: #ff94a3;
+          --shadow: 0 18px 50px rgba(0, 0, 0, 0.22);
+        }
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-width: 320px;
+        background: radial-gradient(circle at top right, var(--primary-soft), transparent 34%), var(--bg);
+        color: var(--text);
+        font: 15px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      button, input { font: inherit; }
+      button { cursor: pointer; }
+      .shell { width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding: 34px 0 64px; }
+      .topbar { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 32px; }
+      .brand { display: flex; align-items: center; gap: 12px; }
+      .brand-mark { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 13px; background: var(--primary); color: #fff; font-weight: 800; box-shadow: var(--shadow); }
+      h1, h2, h3, p { margin-top: 0; }
+      h1 { margin-bottom: 3px; font-size: clamp(1.35rem, 2vw, 1.8rem); letter-spacing: -0.03em; }
+      .subtitle { color: var(--muted); margin-bottom: 0; }
+      .health { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 0.86rem; }
+      .health-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--warning); }
+      .health-dot.ready { background: var(--success); }
+      .tabs { display: flex; gap: 8px; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+      .tab { border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); padding: 10px 4px; margin-right: 18px; font-weight: 700; }
+      .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+      .panel { display: none; }
+      .panel.active { display: block; }
+      .card { background: color-mix(in srgb, var(--surface) 94%, transparent); border: 1px solid var(--border); border-radius: 22px; box-shadow: var(--shadow); }
+      .upload-card { padding: 22px; }
+      .section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+      .section-heading h2 { margin-bottom: 0; font-size: 1.05rem; }
+      .section-heading span { color: var(--muted); font-size: 0.86rem; }
+      .upload-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+      .drop-zone { min-height: 245px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 10px; padding: 18px; border: 1.5px dashed var(--border); border-radius: 17px; background: var(--surface-muted); text-align: center; transition: border-color 160ms ease, transform 160ms ease, background 160ms ease; }
+      .drop-zone:hover, .drop-zone.dragging { border-color: var(--primary); background: var(--primary-soft); transform: translateY(-1px); }
+      .drop-zone.has-file { border-style: solid; }
+      .drop-zone input { display: none; }
+      .drop-icon { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px; background: var(--primary-soft); color: var(--primary); font-size: 1.25rem; }
+      .drop-title { margin: 0; font-weight: 800; }
+      .drop-help, .file-name { color: var(--muted); font-size: 0.85rem; }
+      .preview { display: none; width: 100%; height: 155px; border-radius: 11px; object-fit: contain; background: rgba(0, 0, 0, 0.08); }
+      .has-file .preview { display: block; }
+      .has-file .drop-icon, .has-file .drop-help { display: none; }
+      .controls { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; margin-top: 18px; }
+      .preset-group { display: flex; flex-wrap: wrap; gap: 8px; }
+      .button { border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; background: var(--surface); color: var(--text); font-weight: 750; }
+      .button:hover { border-color: var(--primary); color: var(--primary); }
+      .button.primary { border-color: var(--primary); background: var(--primary); color: #fff; }
+      .button.primary:hover { filter: brightness(1.08); }
+      .button:disabled { cursor: not-allowed; opacity: 0.52; }
+      .preset-label { width: 100%; color: var(--muted); font-size: 0.82rem; margin-bottom: -3px; }
+      .message { display: none; margin: 16px 0 0; padding: 11px 13px; border-radius: 10px; color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
+      .message.visible { display: block; }
+      .loading { display: none; align-items: center; gap: 8px; color: var(--muted); font-size: 0.9rem; }
+      .loading.visible { display: flex; }
+      .spinner { width: 15px; height: 15px; border: 2px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.75s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .result-card { margin-top: 20px; padding: 22px; }
+      .result-top { display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: center; margin-bottom: 23px; }
+      .score-label { color: var(--muted); font-size: 0.88rem; }
+      .score { margin: 0; font-size: clamp(3rem, 8vw, 5rem); line-height: 0.95; letter-spacing: -0.07em; }
+      .verdict { display: inline-flex; align-items: center; min-height: 33px; padding: 6px 12px; border-radius: 999px; font-size: 0.86rem; font-weight: 800; text-transform: capitalize; white-space: nowrap; }
+      .verdict.identical, .verdict.near_duplicate { background: color-mix(in srgb, var(--success) 15%, transparent); color: var(--success); }
+      .verdict.tampered_match { background: color-mix(in srgb, var(--warning) 18%, transparent); color: var(--warning); }
+      .verdict.different { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger); }
+      .degraded { display: none; margin: -10px 0 17px; color: var(--warning); font-size: 0.86rem; }
+      .degraded.visible { display: block; }
+      .layers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-bottom: 25px; }
+      .layer { padding: 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface-muted); }
+      .layer-head { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 0.82rem; }
+      .layer-value { color: var(--text); font-weight: 800; }
+      .bar { height: 9px; margin-top: 11px; overflow: hidden; border-radius: 999px; background: var(--border); }
+      .bar-fill { display: block; width: 0; height: 100%; border-radius: inherit; background: var(--primary); transition: width 350ms ease; }
+      .layer:nth-child(2) .bar-fill { background: #8b5cf6; }
+      .layer:nth-child(3) .bar-fill { background: #0f9f78; }
+      .visual-heading, .api-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+      .visual-heading h3, .api-heading h3 { margin-bottom: 0; font-size: 1rem; }
+      .latency { color: var(--muted); font-size: 0.85rem; }
+      .stage { position: relative; width: 100%; max-height: 620px; overflow: hidden; border-radius: 15px; background: #0a0e17; }
+      .stage-image, .heatmap-image { display: block; width: 100%; height: auto; }
+      .heatmap-image { position: absolute; inset: 0; opacity: 0.72; transition: opacity 120ms ease; pointer-events: none; }
+      .box-layer { position: absolute; inset: 0; pointer-events: none; }
+      .region-box { position: absolute; border: 2px solid #ff4058; background: rgba(255, 64, 88, 0.13); box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.6); }
+      .heatmap-control { display: flex; align-items: center; gap: 12px; margin-top: 12px; color: var(--muted); font-size: 0.85rem; }
+      .heatmap-control input { flex: 1; accent-color: var(--primary); }
+      .api-card { padding: 22px; }
+      .code-block { overflow: auto; margin: 0 0 18px; padding: 16px; border: 1px solid var(--border); border-radius: 13px; background: #0c1220; color: #d8e1f5; font: 0.82rem/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-word; }
+      .empty { color: var(--muted); padding: 25px 0 6px; }
+      @media (max-width: 760px) {
+        .shell { width: min(100% - 22px, 640px); padding-top: 22px; }
+        .topbar { align-items: flex-start; flex-direction: column; }
+        .upload-grid, .layers { grid-template-columns: 1fr; }
+        .drop-zone { min-height: 210px; }
+        .result-top { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark">IS</div>
+          <div>
+            <h1>Image Similarity API</h1>
+            <p class="subtitle">Compare an original with a suspect image, then see exactly what changed.</p>
+          </div>
+        </div>
+        <div class="health" title="Model readiness from GET /health"><span id="healthDot" class="health-dot"></span><span id="healthText">Checking API…</span></div>
+      </header>
+
+      <nav class="tabs" aria-label="Demo sections">
+        <button class="tab active" type="button" data-tab="compare">Compare</button>
+        <button class="tab" type="button" data-tab="api">API</button>
+      </nav>
+
+      <section id="comparePanel" class="panel active">
+        <section class="card upload-card">
+          <div class="section-heading"><h2>Choose two images</h2><span>JPEG, PNG, or WebP · 10 MB max each</span></div>
+          <div class="upload-grid">
+            <label id="sourceDrop" class="drop-zone" for="sourceInput">
+              <input id="sourceInput" type="file" accept="image/jpeg,image/png,image/webp" />
+              <span class="drop-icon">＋</span>
+              <p class="drop-title">Original</p>
+              <span class="drop-help">Drop an image here or click to choose</span>
+              <img id="sourcePreview" class="preview" alt="Original preview" />
+              <span id="sourceName" class="file-name">No file selected</span>
+            </label>
+            <label id="suspectDrop" class="drop-zone" for="suspectInput">
+              <input id="suspectInput" type="file" accept="image/jpeg,image/png,image/webp" />
+              <span class="drop-icon">＋</span>
+              <p class="drop-title">Suspect</p>
+              <span class="drop-help">Drop an image here or click to choose</span>
+              <img id="suspectPreview" class="preview" alt="Suspect preview" />
+              <span id="suspectName" class="file-name">No file selected</span>
+            </label>
+          </div>
+          <div class="controls">
+            <div class="preset-group">
+              <span class="preset-label">Quick presets</span>
+              <button class="button" type="button" data-preset="identical">Identical</button>
+              <button class="button" type="button" data-preset="filtered">Filtered copy</button>
+              <button class="button" type="button" data-preset="tampered">Tampered copy</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <span id="loading" class="loading"><span class="spinner"></span>Comparing…</span>
+              <button id="compareButton" class="button primary" type="button" disabled>Compare images</button>
+            </div>
+          </div>
+          <div id="message" class="message" role="alert"></div>
+        </section>
+
+        <section id="resultCard" class="card result-card" hidden>
+          <div class="result-top">
+            <div><span class="score-label">Similarity</span><p id="similarity" class="score">—</p></div>
+            <span id="verdict" class="verdict">—</span>
+          </div>
+          <p id="degraded" class="degraded">Meaning layer unavailable for this request; the score uses hash and pixel evidence only.</p>
+          <div class="layers" aria-label="Layer scores">
+            <div class="layer"><div class="layer-head"><span>Hash</span><span id="hashValue" class="layer-value">—</span></div><div class="bar"><span id="hashBar" class="bar-fill"></span></div></div>
+            <div class="layer"><div class="layer-head"><span>Meaning (CLIP)</span><span id="embeddingValue" class="layer-value">—</span></div><div class="bar"><span id="embeddingBar" class="bar-fill"></span></div></div>
+            <div class="layer"><div class="layer-head"><span>Pixel agreement</span><span id="pixelValue" class="layer-value">—</span></div><div class="bar"><span id="pixelBar" class="bar-fill"></span></div></div>
+          </div>
+          <div class="visual-heading"><h3>Suspect image and change map</h3><span id="latency" class="latency">—</span></div>
+          <div class="stage">
+            <img id="resultSuspect" class="stage-image" alt="Suspect image with comparison overlay" />
+            <img id="heatmap" class="heatmap-image" alt="Difference heatmap" />
+            <div id="boxLayer" class="box-layer"></div>
+          </div>
+          <label class="heatmap-control" for="heatmapSlider"><span>Heatmap</span><input id="heatmapSlider" type="range" min="0" max="1" step="0.05" value="0.72" /><span id="heatmapAmount">72%</span></label>
+        </section>
+      </section>
+
+      <section id="apiPanel" class="panel">
+        <section class="card api-card">
+          <div class="api-heading"><h3>Request</h3><span>multipart/form-data</span></div>
+          <pre id="requestCode" class="code-block">Run a comparison to see the exact request.</pre>
+          <div class="api-heading"><h3>Raw JSON response</h3><span>what the API returned</span></div>
+          <pre id="responseCode" class="code-block">Run a comparison to see the response.</pre>
+          <p class="empty">The endpoint is <code>POST /v1/compare</code>. Health is available at <code>GET /health</code>.</p>
+        </section>
+      </section>
+    </main>
+
+    <script>
+      (() => {
+        const state = { sourceFile: null, suspectFile: null, sourceUrl: '', suspectUrl: '', response: null };
+        const $ = (id) => document.getElementById(id);
+        const sourceInput = $('sourceInput');
+        const suspectInput = $('suspectInput');
+        const compareButton = $('compareButton');
+        const message = $('message');
+        const resultCard = $('resultCard');
+
+        function showMessage(text) {
+          message.textContent = text || '';
+          message.classList.toggle('visible', Boolean(text));
+        }
+
+        function updateCompareState() {
+          compareButton.disabled = !state.sourceFile || !state.suspectFile;
+        }
+
+        function setFile(kind, file) {
+          if (!file) return;
+          if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+            showMessage('Please choose a JPEG, PNG, or WebP image.');
+            return;
+          }
+          if (file.size > 10 * 1024 * 1024) {
+            showMessage('Each image must be 10 MB or smaller.');
+            return;
+          }
+          const urlKey = kind === 'source' ? 'sourceUrl' : 'suspectUrl';
+          if (state[urlKey]) URL.revokeObjectURL(state[urlKey]);
+          state[kind + 'File'] = file;
+          state[urlKey] = URL.createObjectURL(file);
+          $(kind + 'Preview').src = state[urlKey];
+          $(kind + 'Name').textContent = file.name;
+          $(kind + 'Drop').classList.add('has-file');
+          showMessage('');
+          resultCard.hidden = true;
+          updateCompareState();
+        }
+
+        function wireDropZone(kind) {
+          const zone = $(kind + 'Drop');
+          const input = $(kind + 'Input');
+          input.addEventListener('change', () => setFile(kind, input.files && input.files[0]));
+          ['dragenter', 'dragover'].forEach((eventName) => zone.addEventListener(eventName, (event) => { event.preventDefault(); zone.classList.add('dragging'); }));
+          ['dragleave', 'drop'].forEach((eventName) => zone.addEventListener(eventName, (event) => { event.preventDefault(); zone.classList.remove('dragging'); }));
+          zone.addEventListener('drop', (event) => setFile(kind, event.dataTransfer && event.dataTransfer.files[0]));
+        }
+
+        function prettyPercent(value) {
+          return value === null || value === undefined ? 'Unavailable' : Math.round(value * 1000) / 10 + '%';
+        }
+
+        function setBar(barId, value, valueId) {
+          const bar = $(barId);
+          const label = $(valueId);
+          if (value === null || value === undefined) {
+            bar.style.width = '0%';
+            label.textContent = 'Unavailable';
+            return;
+          }
+          const safe = Math.max(0, Math.min(1, value));
+          bar.style.width = safe * 100 + '%';
+          label.textContent = prettyPercent(safe);
+        }
+
+        function renderBoxes(regions, size) {
+          const layer = $('boxLayer');
+          layer.replaceChildren();
+          (regions || []).forEach((region) => {
+            const box = document.createElement('span');
+            box.className = 'region-box';
+            box.style.left = region.x / size.width * 100 + '%';
+            box.style.top = region.y / size.height * 100 + '%';
+            box.style.width = region.width / size.width * 100 + '%';
+            box.style.height = region.height / size.height * 100 + '%';
+            box.title = `${region.width} × ${region.height} px`;
+            layer.appendChild(box);
+          });
+        }
+
+        function renderResult(data) {
+          state.response = data;
+          resultCard.hidden = false;
+          $('similarity').textContent = Math.round(data.similarity * 1000) / 10 + '%';
+          $('verdict').textContent = String(data.verdict).replace('_', ' ');
+          $('verdict').className = 'verdict ' + data.verdict;
+          $('degraded').classList.toggle('visible', data.degraded === true);
+          setBar('hashBar', data.layers.hashScore, 'hashValue');
+          setBar('embeddingBar', data.layers.embeddingScore, 'embeddingValue');
+          setBar('pixelBar', data.layers.pixelScore, 'pixelValue');
+          $('latency').textContent = `Total latency: ${data.timingMs.total} ms`;
+          $('resultSuspect').src = state.suspectUrl;
+          $('heatmap').src = data.heatmapPngBase64 ? 'data:image/png;base64,' + data.heatmapPngBase64 : '';
+          $('heatmap').style.display = data.heatmapPngBase64 ? 'block' : 'none';
+          renderBoxes(data.regions, data.normalizedSize);
+          $('responseCode').textContent = JSON.stringify(data, null, 2);
+          const sourceName = state.sourceFile ? state.sourceFile.name : 'source.png';
+          const suspectName = state.suspectFile ? state.suspectFile.name : 'suspect.png';
+          $('requestCode').textContent = `curl -X POST ${location.origin}/v1/compare \\\n+  -F "source=@${sourceName}" \\\n+  -F "suspect=@${suspectName}"`;
+        }
+
+        async function compare() {
+          if (!state.sourceFile || !state.suspectFile) return;
+          compareButton.disabled = true;
+          compareButton.textContent = 'Comparing…';
+          $('loading').classList.add('visible');
+          showMessage('');
+          const form = new FormData();
+          form.append('source', state.sourceFile);
+          form.append('suspect', state.suspectFile);
+          try {
+            const response = await fetch('/v1/compare', { method: 'POST', body: form });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data && data.error ? data.error.message : 'The comparison failed.');
+            renderResult(data);
+          } catch (error) {
+            showMessage(error instanceof Error ? error.message : 'The comparison failed.');
+          } finally {
+            $('loading').classList.remove('visible');
+            compareButton.textContent = 'Compare images';
+            updateCompareState();
+          }
+        }
+
+        async function fetchPreset(path, filename) {
+          const response = await fetch(path);
+          if (!response.ok) throw new Error('Preset image could not be loaded.');
+          const blob = await response.blob();
+          return new File([blob], filename, { type: blob.type });
+        }
+
+        async function loadPreset(name) {
+          const presets = {
+            identical: ['identical-source.png', 'identical-suspect.png'],
+            filtered: ['filtered-source.png', 'filtered-suspect.jpg'],
+            tampered: ['tampered-source.png', 'tampered-suspect.png'],
+          };
+          const files = presets[name];
+          if (!files) return;
+          showMessage('');
+          try {
+            const [source, suspect] = await Promise.all([
+              fetchPreset('/samples/' + files[0], files[0]),
+              fetchPreset('/samples/' + files[1], files[1]),
+            ]);
+            setFile('source', source);
+            setFile('suspect', suspect);
+            await compare();
+          } catch (error) {
+            showMessage(error instanceof Error ? error.message : 'Preset could not be loaded.');
+          }
+        }
+
+        function activateTab(name) {
+          document.querySelectorAll('.tab').forEach((tab) => tab.classList.toggle('active', tab.dataset.tab === name));
+          $('comparePanel').classList.toggle('active', name === 'compare');
+          $('apiPanel').classList.toggle('active', name === 'api');
+        }
+
+        async function checkHealth() {
+          try {
+            const response = await fetch('/health');
+            const data = await response.json();
+            $('healthDot').classList.toggle('ready', data.ok === true && data.modelReady === true);
+            $('healthText').textContent = data.modelReady ? 'API + CLIP ready' : 'API ready · CLIP warming up';
+          } catch {
+            $('healthText').textContent = 'API unavailable';
+          }
+        }
+
+        wireDropZone('source');
+        wireDropZone('suspect');
+        compareButton.addEventListener('click', compare);
+        document.querySelectorAll('[data-preset]').forEach((button) => button.addEventListener('click', () => loadPreset(button.dataset.preset)));
+        document.querySelectorAll('[data-tab]').forEach((button) => button.addEventListener('click', () => activateTab(button.dataset.tab)));
+        $('heatmapSlider').addEventListener('input', (event) => {
+          const value = Number(event.target.value);
+          $('heatmap').style.opacity = value;
+          $('heatmapAmount').textContent = Math.round(value * 100) + '%';
+        });
+        checkHealth();
+      })();
+    </script>
+  </body>
+</html>

@@ -8,9 +8,10 @@ import { pathToFileURL } from 'node:url';
 import { compareHashes, computeHashes } from './layers/hash.js';
 import { exactMatch } from './layers/exact.js';
 import { ClipEmbedder, type EmbeddingProvider } from './layers/embed.js';
+import { fuseLayers } from './layers/fuse.js';
 import { ingestImage, MAX_UPLOAD_BYTES } from './layers/ingest.js';
 import { analyzeTamper } from './layers/tamper.js';
-import { AppError, type ErrorResponse, type Verdict } from './types.js';
+import { AppError, type CompareResponse, type ErrorResponse } from './types.js';
 
 export interface ServerOptions {
   logger?: boolean;
@@ -64,6 +65,14 @@ export function buildApp(options: ServerOptions = {}): FastifyInstance {
       const exactMs = Math.round(performance.now() - exactStartedAt);
 
       if (exact) {
+        const fusion = fuseLayers({
+          exact: true,
+          phashDistance: 0,
+          dhashDistance: 0,
+          embeddingCosine: null,
+          changedFraction: 0,
+          regions: [],
+        });
         const timingMs = {
           total: Math.round(performance.now() - startedAt),
           ingest: ingestMs,
@@ -73,16 +82,16 @@ export function buildApp(options: ServerOptions = {}): FastifyInstance {
         };
         logRequest(requestId, timingMs, 'identical');
         return reply.send({
-          similarity: 1,
-          verdict: 'identical' satisfies Verdict,
+          similarity: fusion.similarity,
+          verdict: fusion.verdict,
           layers: {
             exact: true,
             phashDistance: 0,
             dhashDistance: 0,
-            hashScore: 1,
+            hashScore: fusion.hashScore,
             embeddingCosine: null,
-            embeddingScore: null,
-            pixelScore: 1,
+            embeddingScore: fusion.embeddingScore,
+            pixelScore: fusion.pixelScore,
             changedFraction: 0,
           },
           regions: [],
@@ -91,7 +100,7 @@ export function buildApp(options: ServerOptions = {}): FastifyInstance {
           timingMs,
           requestId,
           degraded: false,
-        });
+        } satisfies CompareResponse);
       }
 
       const hashStartedAt = performance.now();
@@ -101,25 +110,24 @@ export function buildApp(options: ServerOptions = {}): FastifyInstance {
       ]);
       const hashes = compareHashes(sourceHashes, suspectHashes);
       hashMs = Math.round(performance.now() - hashStartedAt);
-      const hashScore = Math.max(
-        0,
-        Math.min(1, 1 - ((hashes.phashDistance / 64 + hashes.dhashDistance / 64) / 2)),
-      );
       const embeddingStartedAt = performance.now();
       const embedding = options.embedder
         ? await options.embedder.compare(source, suspect)
         : null;
       embedMs = Math.round(performance.now() - embeddingStartedAt);
       const embeddingCosine = embedding?.cosine ?? null;
-      const embeddingScore = embeddingCosine === null
-        ? null
-        : Math.max(0, Math.min(1, (embeddingCosine - 0.6) / 0.4));
       const degraded = embedding === null;
       const tamperStartedAt = performance.now();
       const tamper = await analyzeTamper(source, suspect);
       tamperMs = Math.round(performance.now() - tamperStartedAt);
-      const pixelScore = Math.max(0, Math.min(1, 1 - tamper.changedFraction * 4));
-      const verdict: Verdict = hashScore >= 0.9 ? 'near_duplicate' : 'different';
+      const fusion = fuseLayers({
+        exact: false,
+        phashDistance: hashes.phashDistance,
+        dhashDistance: hashes.dhashDistance,
+        embeddingCosine,
+        changedFraction: tamper.changedFraction,
+        regions: tamper.regions,
+      });
       const timingMs = {
         total: Math.round(performance.now() - startedAt),
         ingest: ingestMs,
@@ -127,19 +135,19 @@ export function buildApp(options: ServerOptions = {}): FastifyInstance {
         embed: embedMs,
         tamper: tamperMs,
       };
-      logRequest(requestId, timingMs, verdict);
+      logRequest(requestId, timingMs, fusion.verdict);
 
       return reply.send({
-        similarity: hashScore,
-        verdict,
+        similarity: fusion.similarity,
+        verdict: fusion.verdict,
         layers: {
           exact: false,
           phashDistance: hashes.phashDistance,
           dhashDistance: hashes.dhashDistance,
-          hashScore,
+          hashScore: fusion.hashScore,
           embeddingCosine,
-          embeddingScore,
-          pixelScore,
+          embeddingScore: fusion.embeddingScore,
+          pixelScore: fusion.pixelScore,
           changedFraction: tamper.changedFraction,
         },
         regions: tamper.regions,
@@ -148,7 +156,7 @@ export function buildApp(options: ServerOptions = {}): FastifyInstance {
         timingMs,
         requestId,
         ...(degraded ? { degraded: true } : {}),
-      });
+      } satisfies CompareResponse);
     } catch (error: unknown) {
       const appError = toAppError(error);
       const timingMs = {

@@ -42,6 +42,37 @@ export interface ErrorResponse {
   };
 }
 
+export interface LayerScores {
+  exact: boolean;
+  phashDistance: number;
+  dhashDistance: number;
+  hashScore: number;
+  embeddingCosine: number | null;
+  embeddingScore: number | null;
+  pixelScore: number;
+  changedFraction: number;
+}
+
+export interface TimingMs {
+  total: number;
+  ingest: number;
+  hash: number;
+  embed: number;
+  tamper: number;
+}
+
+export interface CompareResponse {
+  similarity: number;
+  verdict: Verdict;
+  layers: LayerScores;
+  regions: Region[];
+  heatmapPngBase64: string;
+  normalizedSize: ImageSize;
+  timingMs: TimingMs;
+  requestId: string;
+  degraded?: boolean;
+}
+
 export class AppError extends Error {
   public readonly code: ErrorCode;
   public readonly statusCode: number;

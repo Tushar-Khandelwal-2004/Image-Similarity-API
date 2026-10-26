@@ -1,0 +1,38 @@
+{
+  "imageCount": 20,
+  "positivePairs": 160,
+  "negativePairs": 160,
+  "attacks": [
+    "jpeg_quality_60",
+    "resize_50_percent",
+    "gaussian_blur",
+    "brightness_shift",
+    "grayscale",
+    "noise",
+    "pasted_patch",
+    "text_overlay"
+  ],
+  "methods": [
+    {
+      "method": "full fusion",
+      "threshold": 0.9194352816703448,
+      "accuracy": 0.84375,
+      "falsePositiveRate": 0.05,
+      "averageLatencyMs": 89.40026125000001
+    },
+    {
+      "method": "pHash only",
+      "threshold": 0.94140625,
+      "accuracy": 0.8375,
+      "falsePositiveRate": 0,
+      "averageLatencyMs": 18.40475437500022
+    },
+    {
+      "method": "pixel difference only",
+      "threshold": 0.9870198567708333,
+      "accuracy": 0.853125,
+      "falsePositiveRate": 0.05,
+      "averageLatencyMs": 18.09872125000004
+    }
+  ]
+}

@@ -7,6 +7,13 @@ export interface ImageSize {
   height: number;
 }
 
+export interface Region {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface NormalizedImage {
   buffer: Buffer;
   size: ImageSize;

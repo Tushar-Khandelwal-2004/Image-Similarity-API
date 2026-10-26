@@ -9,6 +9,7 @@ import { compareHashes, computeHashes } from './layers/hash.js';
 import { exactMatch } from './layers/exact.js';
 import { ClipEmbedder, type EmbeddingProvider } from './layers/embed.js';
 import { ingestImage, MAX_UPLOAD_BYTES } from './layers/ingest.js';
+import { analyzeTamper } from './layers/tamper.js';
 import { AppError, type ErrorResponse, type Verdict } from './types.js';
 
 export interface ServerOptions {
@@ -47,6 +48,7 @@ export function buildApp(options: ServerOptions = {}): FastifyInstance {
     let ingestMs = 0;
     let hashMs = 0;
     let embedMs = 0;
+    let tamperMs = 0;
 
     try {
       const uploaded = await readMultipartFiles(request);
@@ -80,6 +82,8 @@ export function buildApp(options: ServerOptions = {}): FastifyInstance {
             hashScore: 1,
             embeddingCosine: null,
             embeddingScore: null,
+            pixelScore: 1,
+            changedFraction: 0,
           },
           regions: [],
           heatmapPngBase64: '',
@@ -111,13 +115,17 @@ export function buildApp(options: ServerOptions = {}): FastifyInstance {
         ? null
         : Math.max(0, Math.min(1, (embeddingCosine - 0.6) / 0.4));
       const degraded = embedding === null;
+      const tamperStartedAt = performance.now();
+      const tamper = await analyzeTamper(source, suspect);
+      tamperMs = Math.round(performance.now() - tamperStartedAt);
+      const pixelScore = Math.max(0, Math.min(1, 1 - tamper.changedFraction * 4));
       const verdict: Verdict = hashScore >= 0.9 ? 'near_duplicate' : 'different';
       const timingMs = {
         total: Math.round(performance.now() - startedAt),
         ingest: ingestMs,
         hash: hashMs,
         embed: embedMs,
-        tamper: 0,
+        tamper: tamperMs,
       };
       logRequest(requestId, timingMs, verdict);
 
@@ -131,9 +139,11 @@ export function buildApp(options: ServerOptions = {}): FastifyInstance {
           hashScore,
           embeddingCosine,
           embeddingScore,
+          pixelScore,
+          changedFraction: tamper.changedFraction,
         },
-        regions: [],
-        heatmapPngBase64: '',
+        regions: tamper.regions,
+        heatmapPngBase64: tamper.heatmapPng.toString('base64'),
         normalizedSize: suspect.size,
         timingMs,
         requestId,
@@ -146,7 +156,7 @@ export function buildApp(options: ServerOptions = {}): FastifyInstance {
         ingest: ingestMs,
         hash: hashMs,
         embed: embedMs,
-        tamper: 0,
+        tamper: tamperMs,
       };
       logRequest(requestId, timingMs, 'error', appError.code);
       return reply.status(appError.statusCode).send({

@@ -53,19 +53,16 @@ export function computeDifferenceMap(
   }
 
   const rawDifferences = new Uint8Array(pixelCount);
-  let maximumDifference = 0;
   for (let index = 0; index < pixelCount; index += 1) {
     const difference = Math.abs((source[index] ?? 0) - (suspect[index] ?? 0));
     rawDifferences[index] = difference;
-    maximumDifference = Math.max(maximumDifference, difference);
   }
 
   const strengths = new Uint8Array(pixelCount);
   const mask = new Uint8Array(pixelCount);
   for (let index = 0; index < pixelCount; index += 1) {
-    const strength = maximumDifference === 0
-      ? 0
-      : Math.round(((rawDifferences[index] ?? 0) / maximumDifference) * 255);
+    // A grayscale absolute difference is already bounded to the required 0..255 range.
+    const strength = rawDifferences[index] ?? 0;
     strengths[index] = strength;
     if (strength >= threshold) {
       mask[index] = 1;

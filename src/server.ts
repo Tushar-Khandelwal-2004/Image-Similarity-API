@@ -7,12 +7,14 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { compareHashes, computeHashes } from './layers/hash.js';
 import { exactMatch } from './layers/exact.js';
+import { ClipEmbedder, type EmbeddingProvider } from './layers/embed.js';
 import { ingestImage, MAX_UPLOAD_BYTES } from './layers/ingest.js';
 import { AppError, type ErrorResponse, type Verdict } from './types.js';
 
 export interface ServerOptions {
   logger?: boolean;
   modelReady?: () => boolean;
+  embedder?: EmbeddingProvider;
 }
 
 export function buildApp(options: ServerOptions = {}): FastifyInstance {
@@ -36,7 +38,7 @@ export function buildApp(options: ServerOptions = {}): FastifyInstance {
 
   app.get('/health', async () => ({
     ok: true,
-    modelReady: options.modelReady?.() ?? false,
+    modelReady: options.modelReady?.() ?? options.embedder?.modelReady ?? false,
   }));
 
   app.post('/v1/compare', async (request, reply) => {
@@ -44,6 +46,7 @@ export function buildApp(options: ServerOptions = {}): FastifyInstance {
     const startedAt = performance.now();
     let ingestMs = 0;
     let hashMs = 0;
+    let embedMs = 0;
 
     try {
       const uploaded = await readMultipartFiles(request);
@@ -75,12 +78,15 @@ export function buildApp(options: ServerOptions = {}): FastifyInstance {
             phashDistance: 0,
             dhashDistance: 0,
             hashScore: 1,
+            embeddingCosine: null,
+            embeddingScore: null,
           },
           regions: [],
           heatmapPngBase64: '',
           normalizedSize: suspect.size,
           timingMs,
           requestId,
+          degraded: false,
         });
       }
 
@@ -95,12 +101,22 @@ export function buildApp(options: ServerOptions = {}): FastifyInstance {
         0,
         Math.min(1, 1 - ((hashes.phashDistance / 64 + hashes.dhashDistance / 64) / 2)),
       );
+      const embeddingStartedAt = performance.now();
+      const embedding = options.embedder
+        ? await options.embedder.compare(source, suspect)
+        : null;
+      embedMs = Math.round(performance.now() - embeddingStartedAt);
+      const embeddingCosine = embedding?.cosine ?? null;
+      const embeddingScore = embeddingCosine === null
+        ? null
+        : Math.max(0, Math.min(1, (embeddingCosine - 0.6) / 0.4));
+      const degraded = embedding === null;
       const verdict: Verdict = hashScore >= 0.9 ? 'near_duplicate' : 'different';
       const timingMs = {
         total: Math.round(performance.now() - startedAt),
         ingest: ingestMs,
         hash: hashMs,
-        embed: 0,
+        embed: embedMs,
         tamper: 0,
       };
       logRequest(requestId, timingMs, verdict);
@@ -113,12 +129,15 @@ export function buildApp(options: ServerOptions = {}): FastifyInstance {
           phashDistance: hashes.phashDistance,
           dhashDistance: hashes.dhashDistance,
           hashScore,
+          embeddingCosine,
+          embeddingScore,
         },
         regions: [],
         heatmapPngBase64: '',
         normalizedSize: suspect.size,
         timingMs,
         requestId,
+        ...(degraded ? { degraded: true } : {}),
       });
     } catch (error: unknown) {
       const appError = toAppError(error);
@@ -126,7 +145,7 @@ export function buildApp(options: ServerOptions = {}): FastifyInstance {
         total: Math.round(performance.now() - startedAt),
         ingest: ingestMs,
         hash: hashMs,
-        embed: 0,
+        embed: embedMs,
         tamper: 0,
       };
       logRequest(requestId, timingMs, 'error', appError.code);
@@ -197,11 +216,13 @@ function logRequest(requestId: string, timingMs: Record<string, number>, verdict
 }
 
 export async function startServer(): Promise<void> {
-  const app = buildApp();
+  const embedder = new ClipEmbedder();
+  const app = buildApp({ embedder });
   const portValue = Number.parseInt(process.env.PORT ?? '3000', 10);
   const port = Number.isFinite(portValue) && portValue > 0 ? portValue : 3000;
 
   await app.listen({ host: '0.0.0.0', port });
+  void embedder.initialize();
 }
 
 const entrypoint = process.argv[1];

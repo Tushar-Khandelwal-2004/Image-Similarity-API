@@ -2,3 +2,4 @@ MVP.md
 node_modules/
 dist/
 .cache/
+bench/coco_images/

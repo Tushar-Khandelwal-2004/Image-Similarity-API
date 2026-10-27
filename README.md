@@ -185,13 +185,15 @@ This is the planned design, not a built feature. The current service is single-p
 
 ## API reference
 
-### `GET /health`
+### Health endpoints
 
 ```json
 { "ok": true, "modelReady": true }
 ```
 
-`GET /health/live` is a lightweight process liveness check. `GET /health/ready` returns `200` only when the CLIP model is ready and `503` while it is warming up; container health checks use this endpoint.
+- `GET /health` returns service and model state.
+- `GET /health/live` is a lightweight process liveness check for a platform restart probe.
+- `GET /health/ready` returns `200` only when CLIP is ready and `503` while it is warming up. Docker health checks and deployment smoke tests use this endpoint.
 
 ### `POST /v1/compare`
 
@@ -473,9 +475,17 @@ Use the exact URL supplied by Hugging Face; the example above intentionally show
 
 Other hosts can run the production Docker target or `pnpm start` behind a platform load balancer. The CLIP model should be baked into the image or cached on a persistent volume to avoid cold-download latency.
 
-### Automated deployment
+### Automated deployment and CI
 
-The repository deploys `main` automatically through `.github/workflows/ci.yml` after verification and the Docker smoke test pass. Add a repository Actions secret named `HF_TOKEN` with write access to `beluga-69/securepixel-ai-service`. Pull requests run the production build, vulnerability scan, and local smoke test; pushes to `main` publish the current commit and then verify `/health/ready` plus the three demo presets at [beluga-69-securepixel-ai-service.hf.space](https://beluga-69-securepixel-ai-service.hf.space/).
+All automation is defined in `.github/workflows/ci.yml`:
+
+- Pull requests run typecheck, the test suite, the quick benchmark, a production Docker build, a Trivy vulnerability scan, and a local container smoke test.
+- Pushes to `main` run the same verification first, then deploy the verified commit to Hugging Face.
+- Deployment uses the repository Actions secret `HF_TOKEN`, which needs write access to `beluga-69/securepixel-ai-service`.
+- The `production` environment can be configured in GitHub with required reviewers or other protection rules before deployment is allowed.
+- Successful deployment verifies `/health/ready` and the identical, filtered, and tampered demo presets.
+
+The workflow uses pnpm `11.25.0`, Node.js `22`, Docker Buildx GitHub Actions cache, and a non-blocking HIGH/CRITICAL Trivy scan (`ignore-unfixed: true`).
 
 ## Roadmap
 

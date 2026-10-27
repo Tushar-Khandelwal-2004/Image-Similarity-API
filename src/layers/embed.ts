@@ -3,8 +3,14 @@ import {
   AutoProcessor,
   CLIPVisionModelWithProjection,
   RawImage,
+  env,
   type Processor,
 } from '@xenova/transformers';
+
+if (process.env.TRANSFORMERS_CACHE) {
+  env.cacheDir = process.env.TRANSFORMERS_CACHE;
+  env.useFSCache = true;
+}
 
 export const CLIP_MODEL_ID = 'Xenova/clip-vit-base-patch32';
 export const EMBEDDING_TIMEOUT_MS = 5_000;

@@ -1,0 +1,69 @@
+services:
+  api:
+    build:
+      context: .
+      target: dev
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      TRANSFORMERS_CACHE: /app/model-cache
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./src:/app/src
+      - ./public:/app/public
+      - node_modules:/app/node_modules
+      - model_cache:/app/model-cache
+    command: pnpm exec tsx watch src/server.ts
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  api_prod:
+    build:
+      context: .
+      target: runtime
+    environment:
+      NODE_ENV: production
+      PORT: 7860
+      TRANSFORMERS_CACHE: /app/model-cache
+    ports:
+      - "7861:7860"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:7860/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+
+  bench:
+    build:
+      context: .
+      target: dev
+    environment:
+      NODE_ENV: development
+      TRANSFORMERS_CACHE: /app/model-cache
+    command: pnpm bench
+    volumes:
+      - ./bench:/app/bench
+      - ./docs:/app/docs
+      - ./results:/app/results
+      - node_modules:/app/node_modules
+      - model_cache:/app/model-cache
+
+  test:
+    build:
+      context: .
+      target: dev
+    environment:
+      NODE_ENV: test
+    command: sh -c "pnpm test && pnpm run typecheck"
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+
+volumes:
+  node_modules:
+  model_cache:

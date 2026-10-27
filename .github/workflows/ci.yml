@@ -2,7 +2,16 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: image-similarity-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   verify:
@@ -32,6 +41,7 @@ jobs:
 
   deployment:
     name: Deployment smoke test
+    needs: verify
     runs-on: ubuntu-latest
     steps:
       - name: Check out pull request
@@ -47,8 +57,25 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
       - name: Build production image
-        run: docker build --target runtime -t image-similarity-api:ci .
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runtime
+          tags: image-similarity-api:ci
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Scan production image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: image-similarity-api:ci
+          format: table
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+          exit-code: '0'
       - name: Start production container
         run: docker run --detach --name image-similarity-api-ci --publish 7860:7860 image-similarity-api:ci
       - name: Verify local deployment
@@ -59,3 +86,37 @@ jobs:
       - name: Remove production container
         if: always()
         run: docker rm --force image-similarity-api-ci
+
+  deploy:
+    name: Deploy Hugging Face Space
+    if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch' }}
+    needs: [verify, deployment]
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://beluga-69-securepixel-ai-service.hf.space
+    env:
+      HF_SPACE_ID: beluga-69/securepixel-ai-service
+      DEPLOYMENT_URL: https://beluga-69-securepixel-ai-service.hf.space
+    steps:
+      - name: Check out deployed commit
+        uses: actions/checkout@v4
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Deploy current commit
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: pnpm deploy:space
+      - name: Verify deployed Space
+        env:
+          DEPLOYMENT_TIMEOUT_MS: 900000
+        run: pnpm exec tsx scripts/smoke-deployment.ts

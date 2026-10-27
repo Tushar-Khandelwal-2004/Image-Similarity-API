@@ -191,6 +191,8 @@ This is the planned design, not a built feature. The current service is single-p
 { "ok": true, "modelReady": true }
 ```
 
+`GET /health/live` is a lightweight process liveness check. `GET /health/ready` returns `200` only when the CLIP model is ready and `503` while it is warming up; container health checks use this endpoint.
+
 ### `POST /v1/compare`
 
 Send `multipart/form-data` with exactly two file fields named `source` and `suspect`. Accepted formats are JPEG, PNG, and WebP. Each upload is limited to 10 MB, Sharp is configured with a 40-million-pixel input limit, and normalization applies EXIF rotation, white flattening, sRGB conversion, metadata stripping, and a 512-pixel long-side limit.
@@ -218,9 +220,21 @@ The response fields are `similarity`, `verdict`, `layers`, `regions`, `heatmapPn
 | `MISSING_FILE` | 400 | `source` or `suspect` is missing or duplicated |
 | `FILE_TOO_LARGE` | 413 | An upload exceeds the 10 MB limit |
 | `INVALID_IMAGE` | 400 | Bytes are not a readable JPEG, PNG, or WebP |
+| `UNAUTHORIZED` | 401 | `API_KEY` is configured and `x-api-key` is missing or invalid |
+| `RATE_LIMITED` | 429 | The client or comparison queue exceeded its configured limit |
 | `INTERNAL` | 500 | Unexpected server failure |
 
-All errors use `{ "error": { "code": "...", "message": "..." } }`.
+All errors use `{ "error": { "code": "...", "message": "..." }, "requestId": "..." }`. Rate-limited responses include `Retry-After`.
+
+### Production configuration
+
+Copy `.env.example` and configure the values appropriate for the host:
+
+- `API_KEY` optionally protects `/v1/compare` with the `x-api-key` header.
+- `CORS_ORIGIN` enables browser clients from one or more comma-separated origins.
+- `RATE_LIMIT_MAX` and `RATE_LIMIT_WINDOW_MS` configure the per-process client limit.
+- `MAX_CONCURRENT_COMPARISONS` and `MAX_QUEUED_COMPARISONS` protect CLIP inference resources.
+- `TRUST_PROXY=true` is appropriate only behind a trusted reverse proxy.
 
 ## Benchmarks
 
@@ -461,7 +475,7 @@ Other hosts can run the production Docker target or `pnpm start` behind a platfo
 
 ### Automated deployment
 
-The repository deploys `main` automatically through `.github/workflows/deploy-space.yml`. Add a repository Actions secret named `HF_TOKEN` with write access to `beluga-69/securepixel-ai-service`. Pull requests run the Docker production build and a local smoke test; pushes to `main` publish the current commit and then verify `/health` plus the three demo presets at [beluga-69-securepixel-ai-service.hf.space](https://beluga-69-securepixel-ai-service.hf.space/).
+The repository deploys `main` automatically through `.github/workflows/ci.yml` after verification and the Docker smoke test pass. Add a repository Actions secret named `HF_TOKEN` with write access to `beluga-69/securepixel-ai-service`. Pull requests run the production build, vulnerability scan, and local smoke test; pushes to `main` publish the current commit and then verify `/health/ready` plus the three demo presets at [beluga-69-securepixel-ai-service.hf.space](https://beluga-69-securepixel-ai-service.hf.space/).
 
 ## Roadmap
 
@@ -469,7 +483,6 @@ The repository deploys `main` automatically through `.github/workflows/deploy-sp
 - Redis result and embedding caching
 - Circuit breakers and graceful degradation controls
 - Keypoint and RANSAC geometric alignment
-- Rate limits and API keys
 - Object storage for large inputs and results
 
 ## Known limitations

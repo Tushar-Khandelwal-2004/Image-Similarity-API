@@ -4,6 +4,7 @@
   "private": true,
   "description": "One-day MVP for comparing original and suspect images.",
   "type": "module",
+  "packageManager": "pnpm@11.25.0",
   "engines": {
     "node": ">=22"
   },

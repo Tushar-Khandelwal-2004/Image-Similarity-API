@@ -427,7 +427,17 @@ pnpm run build
 pnpm bench:quick
 ```
 
-Docker development and production commands are documented in the next section. The full COCO run is:
+Docker development, production, test, and benchmark commands:
+
+```bash
+docker-compose up api
+docker-compose run --rm test
+docker-compose run --rm bench pnpm bench:quick
+docker build --target runtime -t image-similarity-api:runtime .
+docker run --rm -p 7860:7860 image-similarity-api:runtime
+```
+
+The full COCO run is:
 
 ```bash
 pnpm bench:data

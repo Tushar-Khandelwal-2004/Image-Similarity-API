@@ -13,7 +13,10 @@
     "start": "node dist/src/server.js",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "bench": "tsx bench/run.ts"
+    "bench:data": "tsx bench/data.ts",
+    "bench": "tsx bench/run.ts",
+    "bench:quick": "tsx bench/run.ts --quick",
+    "readme:bench": "tsx scripts/update-readme-bench.ts"
   },
   "dependencies": {
     "@fastify/multipart": "^9.0.3",

@@ -16,7 +16,8 @@
     "bench:data": "tsx bench/data.ts",
     "bench": "tsx bench/run.ts",
     "bench:quick": "tsx bench/run.ts --quick",
-    "readme:bench": "tsx scripts/update-readme-bench.ts"
+    "readme:bench": "tsx scripts/update-readme-bench.ts",
+    "deploy:space": "tsx scripts/deploy-space.ts"
   },
   "dependencies": {
     "@fastify/multipart": "^9.0.3",

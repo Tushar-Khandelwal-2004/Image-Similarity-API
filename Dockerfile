@@ -1,7 +1,14 @@
 FROM node:22-bookworm-slim AS base
 
 WORKDIR /app
-RUN corepack enable
+RUN apt-get update \
+  && apt-get install --yes --no-install-recommends ca-certificates curl \
+  && mkdir -p /root/.npm/_libvips \
+  && curl --fail --location --retry 5 --retry-all-errors --retry-delay 2 \
+    https://github.com/lovell/sharp-libvips/releases/download/v8.14.5/libvips-8.14.5-linux-x64.tar.br \
+    --output /root/.npm/_libvips/libvips-8.14.5-linux-x64.tar.br \
+  && rm -rf /var/lib/apt/lists/* \
+  && corepack enable
 
 FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -41,6 +48,6 @@ ENV TRANSFORMERS_CACHE=/app/model-cache
 EXPOSE 7860
 USER node
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=5 CMD ["node", "-e", "fetch('http://127.0.0.1:7860/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=5 CMD ["node", "-e", "fetch('http://127.0.0.1:7860/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
 
 CMD ["node", "dist/src/server.js"]

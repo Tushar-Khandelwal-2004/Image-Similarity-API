@@ -123,6 +123,8 @@
       .heatmap-control { display: flex; align-items: center; gap: 12px; margin-top: 12px; color: var(--muted); font-size: 0.85rem; }
       .heatmap-control input { flex: 1; accent-color: var(--primary); }
       .api-card { padding: 22px; }
+      .api-key-row { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; color: var(--muted); font-size: 0.86rem; }
+      .api-key-row input { min-width: 220px; flex: 1; padding: 9px 11px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); color: var(--text); }
       .code-block { overflow: auto; margin: 0 0 18px; padding: 16px; border: 1px solid var(--border); border-radius: 13px; background: #0c1220; color: #d8e1f5; font: 0.82rem/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-word; }
       .empty { color: var(--muted); padding: 25px 0 6px; }
       @media (max-width: 760px) {
@@ -144,7 +146,7 @@
             <p class="subtitle">Compare an original with a suspect image, then see exactly what changed.</p>
           </div>
         </div>
-        <div class="health" title="Model readiness from GET /health"><span id="healthDot" class="health-dot"></span><span id="healthText">Checking API…</span></div>
+         <div class="health" title="Model readiness from GET /health/ready" aria-live="polite"><span id="healthDot" class="health-dot"></span><span id="healthText">Checking API…</span></div>
       </header>
 
       <nav class="tabs" aria-label="Demo sections">
@@ -211,7 +213,8 @@
 
       <section id="apiPanel" class="panel">
         <section class="card api-card">
-          <div class="api-heading"><h3>Request</h3><span>multipart/form-data</span></div>
+           <div class="api-heading"><h3>Request</h3><span>multipart/form-data</span></div>
+           <label class="api-key-row" for="apiKeyInput">API key (optional)<input id="apiKeyInput" type="password" autocomplete="off" placeholder="Only needed when API_KEY is configured" /></label>
           <pre id="requestCode" class="code-block">Run a comparison to see the exact request.</pre>
           <div class="api-heading"><h3>Raw JSON response</h3><span>what the API returned</span></div>
           <pre id="responseCode" class="code-block">Run a comparison to see the response.</pre>
@@ -323,7 +326,17 @@
           $('requestCode').textContent = `curl -X POST ${location.origin}/v1/compare \\\n+  -F "source=@${sourceName}" \\\n+  -F "suspect=@${suspectName}"`;
         }
 
-        async function compare() {
+         async function fetchWithTimeout(input, options = {}, timeoutMs = 30000) {
+           const controller = new AbortController();
+           const timeout = setTimeout(() => controller.abort(), timeoutMs);
+           try {
+             return await fetch(input, { ...options, signal: controller.signal });
+           } finally {
+             clearTimeout(timeout);
+           }
+         }
+
+         async function compare() {
           if (!state.sourceFile || !state.suspectFile) return;
           compareButton.disabled = true;
           compareButton.textContent = 'Comparing…';
@@ -333,12 +346,18 @@
           form.append('source', state.sourceFile);
           form.append('suspect', state.suspectFile);
           try {
-            const response = await fetch('/v1/compare', { method: 'POST', body: form });
-            const data = await response.json();
-            if (!response.ok) throw new Error(data && data.error ? data.error.message : 'The comparison failed.');
-            renderResult(data);
-          } catch (error) {
-            showMessage(error instanceof Error ? error.message : 'The comparison failed.');
+             const headers = {};
+             const apiKey = $('apiKeyInput').value.trim();
+             if (apiKey) headers['x-api-key'] = apiKey;
+             const response = await fetchWithTimeout('/v1/compare', { method: 'POST', body: form, headers });
+             const data = await response.json();
+             if (!response.ok) {
+               const detail = data && data.error ? `${data.error.code}: ${data.error.message}` : 'The comparison failed.';
+               throw new Error(data && data.requestId ? `${detail} (request ${data.requestId})` : detail);
+             }
+             renderResult(data);
+           } catch (error) {
+             showMessage(error instanceof DOMException && error.name === 'AbortError' ? 'The comparison timed out. Please try again.' : error instanceof Error ? error.message : 'The comparison failed.');
           } finally {
             $('loading').classList.remove('visible');
             compareButton.textContent = 'Compare images';
@@ -383,13 +402,14 @@
 
         async function checkHealth() {
           try {
-            const response = await fetch('/health');
-            const data = await response.json();
+             const response = await fetchWithTimeout('/health/ready', {}, 10000);
+             const data = await response.json();
             $('healthDot').classList.toggle('ready', data.ok === true && data.modelReady === true);
             $('healthText').textContent = data.modelReady ? 'API + CLIP ready' : 'API ready · CLIP warming up';
-          } catch {
-            $('healthText').textContent = 'API unavailable';
-          }
+           } catch {
+             $('healthText').textContent = 'API unavailable';
+             $('healthDot').classList.remove('ready');
+           }
         }
 
         wireDropZone('source');
@@ -402,7 +422,8 @@
           $('heatmap').style.opacity = value;
           $('heatmapAmount').textContent = Math.round(value * 100) + '%';
         });
-        checkHealth();
+         checkHealth();
+         window.setInterval(checkHealth, 10000);
       })();
     </script>
   </body>

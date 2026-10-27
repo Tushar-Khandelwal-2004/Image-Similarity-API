@@ -21,7 +21,7 @@ async function waitForHealth(): Promise<HealthResponse> {
   let lastError = 'no response';
   while (Date.now() - startedAt < timeoutMs) {
     try {
-      const response = await fetch(`${baseUrl}/health`);
+      const response = await fetch(`${baseUrl}/health/ready`);
       if (response.ok) {
         const health = await response.json() as HealthResponse;
         if (health.ok && health.modelReady) return health;

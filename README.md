@@ -185,11 +185,15 @@ This is the planned design, not a built feature. The current service is single-p
 
 ## API reference
 
-### `GET /health`
+### Health endpoints
 
 ```json
 { "ok": true, "modelReady": true }
 ```
+
+- `GET /health` returns service and model state.
+- `GET /health/live` is a lightweight process liveness check for a platform restart probe.
+- `GET /health/ready` returns `200` only when CLIP is ready and `503` while it is warming up. Docker health checks and deployment smoke tests use this endpoint.
 
 ### `POST /v1/compare`
 
@@ -218,9 +222,21 @@ The response fields are `similarity`, `verdict`, `layers`, `regions`, `heatmapPn
 | `MISSING_FILE` | 400 | `source` or `suspect` is missing or duplicated |
 | `FILE_TOO_LARGE` | 413 | An upload exceeds the 10 MB limit |
 | `INVALID_IMAGE` | 400 | Bytes are not a readable JPEG, PNG, or WebP |
+| `UNAUTHORIZED` | 401 | `API_KEY` is configured and `x-api-key` is missing or invalid |
+| `RATE_LIMITED` | 429 | The client or comparison queue exceeded its configured limit |
 | `INTERNAL` | 500 | Unexpected server failure |
 
-All errors use `{ "error": { "code": "...", "message": "..." } }`.
+All errors use `{ "error": { "code": "...", "message": "..." }, "requestId": "..." }`. Rate-limited responses include `Retry-After`.
+
+### Production configuration
+
+Copy `.env.example` and configure the values appropriate for the host:
+
+- `API_KEY` optionally protects `/v1/compare` with the `x-api-key` header.
+- `CORS_ORIGIN` enables browser clients from one or more comma-separated origins.
+- `RATE_LIMIT_MAX` and `RATE_LIMIT_WINDOW_MS` configure the per-process client limit.
+- `MAX_CONCURRENT_COMPARISONS` and `MAX_QUEUED_COMPARISONS` protect CLIP inference resources.
+- `TRUST_PROXY=true` is appropriate only behind a trusted reverse proxy.
 
 ## Benchmarks
 
@@ -459,9 +475,17 @@ Use the exact URL supplied by Hugging Face; the example above intentionally show
 
 Other hosts can run the production Docker target or `pnpm start` behind a platform load balancer. The CLIP model should be baked into the image or cached on a persistent volume to avoid cold-download latency.
 
-### Automated deployment
+### Automated deployment and CI
 
-The repository deploys `main` automatically through `.github/workflows/deploy-space.yml`. Add a repository Actions secret named `HF_TOKEN` with write access to `beluga-69/securepixel-ai-service`. Pull requests run the Docker production build and a local smoke test; pushes to `main` publish the current commit and then verify `/health` plus the three demo presets at [beluga-69-securepixel-ai-service.hf.space](https://beluga-69-securepixel-ai-service.hf.space/).
+All automation is defined in `.github/workflows/ci.yml`:
+
+- Pull requests run typecheck, the test suite, the quick benchmark, a production Docker build, a Trivy vulnerability scan, and a local container smoke test.
+- Pushes to `main` run the same verification first, then deploy the verified commit to Hugging Face.
+- Deployment uses the repository Actions secret `HF_TOKEN`, which needs write access to `beluga-69/securepixel-ai-service`.
+- The `production` environment can be configured in GitHub with required reviewers or other protection rules before deployment is allowed.
+- Successful deployment verifies `/health/ready` and the identical, filtered, and tampered demo presets.
+
+The workflow uses pnpm `11.25.0`, Node.js `22`, Docker Buildx GitHub Actions cache, and a non-blocking HIGH/CRITICAL Trivy scan (`ignore-unfixed: true`).
 
 ## Roadmap
 
@@ -469,7 +493,6 @@ The repository deploys `main` automatically through `.github/workflows/deploy-sp
 - Redis result and embedding caching
 - Circuit breakers and graceful degradation controls
 - Keypoint and RANSAC geometric alignment
-- Rate limits and API keys
 - Object storage for large inputs and results
 
 ## Known limitations

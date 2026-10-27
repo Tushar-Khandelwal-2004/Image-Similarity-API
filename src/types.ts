@@ -1,4 +1,4 @@
-export type ErrorCode = 'MISSING_FILE' | 'FILE_TOO_LARGE' | 'INVALID_IMAGE' | 'INTERNAL';
+export type ErrorCode = 'MISSING_FILE' | 'FILE_TOO_LARGE' | 'INVALID_IMAGE' | 'UNAUTHORIZED' | 'RATE_LIMITED' | 'INTERNAL';
 
 export type Verdict = 'identical' | 'near_duplicate' | 'tampered_match' | 'different';
 
@@ -40,6 +40,7 @@ export interface ErrorResponse {
     code: ErrorCode;
     message: string;
   };
+  requestId?: string;
 }
 
 export interface LayerScores {
@@ -76,11 +77,13 @@ export interface CompareResponse {
 export class AppError extends Error {
   public readonly code: ErrorCode;
   public readonly statusCode: number;
+  public readonly retryAfterSeconds: number | undefined;
 
-  public constructor(code: ErrorCode, message: string, statusCode: number) {
+  public constructor(code: ErrorCode, message: string, statusCode: number, retryAfterSeconds?: number) {
     super(message);
     this.name = 'AppError';
     this.code = code;
     this.statusCode = statusCode;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
 }

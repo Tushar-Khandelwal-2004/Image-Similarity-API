@@ -27,3 +27,22 @@ jobs:
         run: pnpm run build
       - name: Quick benchmark
         run: pnpm bench:quick
+
+  deployment:
+    name: Deployment smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out pull request
+        uses: actions/checkout@v4
+      - name: Build production image
+        run: docker build --target runtime -t image-similarity-api:ci .
+      - name: Start production container
+        run: docker run --detach --name image-similarity-api-ci --publish 7860:7860 image-similarity-api:ci
+      - name: Verify local deployment
+        env:
+          DEPLOYMENT_URL: http://127.0.0.1:7860
+          DEPLOYMENT_TIMEOUT_MS: 180000
+        run: pnpm exec tsx scripts/smoke-deployment.ts
+      - name: Remove production container
+        if: always()
+        run: docker rm --force image-similarity-api-ci

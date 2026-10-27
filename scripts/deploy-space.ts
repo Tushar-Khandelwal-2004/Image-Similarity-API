@@ -4,7 +4,10 @@ import os from 'node:os';
 import path from 'node:path';
 
 const root = path.resolve(process.cwd());
-const spaceUrl = process.env.HF_SPACE_URL;
+const spaceId = process.env.HF_SPACE_ID ?? 'beluga-69/securepixel-ai-service';
+const explicitSpaceUrl = process.env.HF_SPACE_URL;
+const token = process.env.HF_TOKEN;
+const spaceUrl = explicitSpaceUrl ?? (token ? `https://hf_user:${token}@huggingface.co/spaces/${spaceId}` : undefined);
 
 function run(command: string, args: string[], cwd: string): string {
   return execFileSync(command, args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
@@ -15,7 +18,7 @@ function sanitized(value: string): string {
 }
 
 async function main(): Promise<void> {
-  if (!spaceUrl) throw new Error('HF_SPACE_URL is required.');
+  if (!spaceUrl) throw new Error('Set HF_SPACE_URL, or set HF_TOKEN for the configured Hugging Face Space.');
   if (!/^https?:\/\//.test(spaceUrl)) throw new Error('HF_SPACE_URL must be an HTTPS or HTTP Git URL.');
   const status = run('git', ['status', '--porcelain'], root).trim();
   if (status) throw new Error('Refusing to deploy with a dirty working tree. Commit or stash local changes first.');

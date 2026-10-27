@@ -459,6 +459,10 @@ Use the exact URL supplied by Hugging Face; the example above intentionally show
 
 Other hosts can run the production Docker target or `pnpm start` behind a platform load balancer. The CLIP model should be baked into the image or cached on a persistent volume to avoid cold-download latency.
 
+### Automated deployment
+
+The repository deploys `main` automatically through `.github/workflows/deploy-space.yml`. Add a repository Actions secret named `HF_TOKEN` with write access to `beluga-69/securepixel-ai-service`. Pull requests run the Docker production build and a local smoke test; pushes to `main` publish the current commit and then verify `/health` plus the three demo presets at [beluga-69-securepixel-ai-service.hf.space](https://beluga-69-securepixel-ai-service.hf.space/).
+
 ## Roadmap
 
 - Queue-based asynchronous jobs
